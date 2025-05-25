@@ -2,99 +2,38 @@
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 NC='\033[0m'
 
-show_help() {
-    echo -e "${GREEN}BudConnect v3.1${NC}"
-    echo "Shell:"
-    echo "  ./BudConnect.sh -l -p PORT"
-    echo "  ./BudConnect.sh -c IP PORT"
-    echo "Chat:"
-    echo "  ./BudConnect.sh -l -p PORT chat"
-    echo "  ./BudConnect.sh -c IP PORT chat"
-    echo "File Transfer:"
-    echo "  ./BudConnect.sh -l -p PORT file"
-    echo "  ./BudConnect.sh -c IP PORT file FILEPATH"
-    exit 0
-}
-
-socket_listen() {
-    local port=$1
-    exec 3<>/dev/tcp/0.0.0.0/$port
-}
-
-socket_connect() {
-    local host=$1
-    local port=$2
-    exec 3<>/dev/tcp/$host/$port
-}
-
-shell_server() {
-    local port=$1
-    while true; do
-        socket_listen $port
-        bash <&3 >&3 2>&3
-        exec 3<&-
-    done
-}
-
-shell_client() {
-    local host=$1
-    local port=$2
-    socket_connect $host $port
-    bash <&3 >&3 2>&3
-}
-
-chat_server() {
-    local port=$1
-    socket_listen $port
-    cat <&3 &
-    cat >&3
-}
-
-chat_client() {
-    local host=$1
-    local port=$2
-    socket_connect $host $port
-    cat <&3 &
-    cat >&3
-}
-
-file_server() {
-    local port=$1
-    socket_listen $port
-    cat <&3 > received_file
-}
-
-file_client() {
-    local host=$1
-    local port=$2
-    local file=$3
-    socket_connect $host $port
-    cat $file >&3
-}
+if ! command -v nc &> /dev/null; then
+    echo -e "${RED}Error: netcat (nc) not found${NC}"
+    echo "Install with:"
+    echo "  Linux: sudo apt install netcat"
+    echo "  Termux: pkg install netcat-openbsd"
+    exit 1
+fi
 
 case $1 in
-    -h|--help) show_help ;;
     -l|--listen)
-        case $2 in
-            -p|--port)
-                case $4 in
-                    chat) chat_server $3 ;;
-                    file) file_server $3 ;;
-                    *) shell_server $3 ;;
-                esac
-                ;;
-            *) show_help ;;
+        echo -e "${GREEN}[*] Listening on port $3${NC}"
+        case $4 in
+            chat) nc -lvp $3 ;;
+            file) nc -lvp $3 > received_file ;;
+            *) nc -lvp $3 -e /bin/bash ;;
         esac
         ;;
     -c|--connect)
+        echo -e "${GREEN}[*] Connecting to $2:$3${NC}"
         case $4 in
-            chat) chat_client $2 $3 ;;
-            file) file_client $2 $3 $5 ;;
-            *) shell_client $2 $3 ;;
+            chat) nc $2 $3 ;;
+            file) [ -z "$5" ] && echo "Specify file path" && exit 1
+                  nc $2 $3 < $5 ;;
+            *) nc $2 $3 ;;
         esac
         ;;
-    *) show_help ;;
+    *)
+        echo "Usage:"
+        echo "  ./budconnect.sh -l -p PORT [mode]"
+        echo "  ./budconnect.sh -c IP PORT [mode]"
+        echo "Modes: shell (default), chat, file"
+        ;;
 esac
